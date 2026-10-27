@@ -262,17 +262,22 @@ def get_analytics() -> Dict:
         for row in cursor.fetchall()
     ]
 
-    # Low confidence questions (for improvement)
+    # Low confidence questions (for improvement) — stored on assistant messages
     cursor.execute("""
-        SELECT content, confidence, created_at
-        FROM messages
-        WHERE role = 'user' AND confidence IS NOT NULL AND confidence < ?
-        ORDER BY created_at DESC
+        SELECT 
+            (SELECT content FROM messages m2 WHERE m2.conversation_id = m.conversation_id 
+             AND m2.id < m.id AND m2.role = 'user' ORDER BY m2.id DESC LIMIT 1) as question,
+            m.confidence, 
+            m.created_at
+        FROM messages m
+        WHERE m.role = 'assistant' AND m.confidence IS NOT NULL AND m.confidence < ?
+        ORDER BY m.created_at DESC
         LIMIT 10
     """, (config.CONFIDENCE_THRESHOLD,))
     low_confidence_queries = [
-        {"question": row[0], "confidence": row[1], "date": row[2]}
+        {"question": row[0] or "Unknown question", "confidence": row[1], "date": row[2]}
         for row in cursor.fetchall()
+        if row[0]  # skip if we couldn't find the user question
     ]
 
     conn.close()

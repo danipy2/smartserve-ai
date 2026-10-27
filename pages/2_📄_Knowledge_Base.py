@@ -32,6 +32,29 @@ import config
 
 init_db()
 
+# ── Auto-seed sample KB if empty ──────────────────────────────────────────────
+def seed_sample_kb():
+    """Load sample knowledge base on first run so the demo always has documents."""
+    sample_file = config.BASE_DIR / "uploads" / "sample_knowledge_base.txt"
+    if not sample_file.exists():
+        return
+    existing_docs = get_all_documents()
+    already_seeded = any(d["filename"] == "sample_knowledge_base.txt" for d in existing_docs)
+    if already_seeded:
+        return
+    try:
+        chunks = process_document(str(sample_file))
+        add_documents(chunks)
+        add_document_record(
+            filename="sample_knowledge_base.txt",
+            file_type=".txt",
+            chunk_count=len(chunks),
+        )
+    except Exception:
+        pass
+
+seed_sample_kb()
+
 ALLOWED_EXTENSIONS = [".pdf", ".txt", ".docx"]
 
 # ── Global Styles ──────────────────────────────────────────────────────────────

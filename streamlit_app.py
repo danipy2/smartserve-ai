@@ -20,6 +20,10 @@ try:
 except Exception:
     pass  # On Render.com, env vars are already set directly
 
+if not os.environ.get("GOOGLE_API_KEY"):
+    st.error("⚠️ **GOOGLE_API_KEY not configured.** Add it as an Environment Variable on Render.com.")
+    st.stop()
+
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -171,7 +175,7 @@ steps = [
     ("🗄️ Vector Store",       "Embeddings stored in ChromaDB for fast similarity search"),
     ("💬 User Question",       "Customer asks a question in natural language"),
     ("🔍 Semantic Search",     "Top-5 most relevant chunks retrieved from ChromaDB"),
-    ("🧠 LLM Generation",      "Gemini 2.0 Flash generates answer grounded in context"),
+    ("🧠 LLM Generation",      "Gemini generates answer grounded in retrieved context"),
     ("📊 Confidence Score",    "LLM self-evaluates confidence → escalate if < 60%"),
 ]
 for i, (title, desc) in enumerate(steps):
@@ -184,7 +188,7 @@ for i, (title, desc) in enumerate(steps):
 
 # Tech stack
 st.markdown('<div class="section-title">🛠️ Tech Stack</div>', unsafe_allow_html=True)
-techs = ["🔗 LangChain 0.3", "♊ Gemini 2.0 Flash", "🗄️ ChromaDB", "⚡ FastAPI",
+techs = ["🔗 LangChain 0.3", "♊ Gemini 3.8 Flash", "🗄️ ChromaDB", "⚡ FastAPI",
          "🎈 Streamlit", "🗃️ SQLite", "📄 PyPDF", "📝 python-docx"]
 st.markdown("".join(f'<span class="tech-chip">{t}</span>' for t in techs), unsafe_allow_html=True)
 

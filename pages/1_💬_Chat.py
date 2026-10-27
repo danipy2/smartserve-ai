@@ -17,16 +17,42 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.rag_chain import query
-from core.vector_store import get_collection_stats
+from core.vector_store import get_collection_stats, add_documents
+from core.document_processor import process_document
 from database.db import (
     get_or_create_conversation,
     add_message,
     get_chat_history,
+    add_document_record,
+    get_all_documents,
     init_db,
 )
 import config
 
 init_db()
+
+# ── Auto-seed sample KB if empty (so demo always works) ───────────────────────
+def seed_sample_kb():
+    """Load sample knowledge base on first run so the chat always has docs."""
+    sample_file = config.BASE_DIR / "uploads" / "sample_knowledge_base.txt"
+    if not sample_file.exists():
+        return
+    existing_docs = get_all_documents()
+    already_seeded = any(d["filename"] == "sample_knowledge_base.txt" for d in existing_docs)
+    if already_seeded:
+        return
+    try:
+        chunks = process_document(str(sample_file))
+        add_documents(chunks)
+        add_document_record(
+            filename="sample_knowledge_base.txt",
+            file_type=".txt",
+            chunk_count=len(chunks),
+        )
+    except Exception:
+        pass  # Silent — don't crash if seeding fails
+
+seed_sample_kb()
 
 
 def run_async(coro):
