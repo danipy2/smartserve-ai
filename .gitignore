@@ -16,6 +16,7 @@ build/
 data/chroma/
 uploads/*
 !uploads/.gitkeep
+!uploads/sample_knowledge_base.txt
 *.db
 
 # IDE
