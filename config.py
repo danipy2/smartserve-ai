@@ -35,7 +35,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")
 
 # --- Model Configuration ---
-LLM_MODEL = "gemini-2.0-flash"
+LLM_MODEL = "gemini-3.8-flash"
 EMBEDDING_MODEL = "models/text-embedding-004"
 LLM_TEMPERATURE = 0.3
 
