@@ -1,6 +1,7 @@
 """
 SmartServe AI — Configuration
-Centralized configuration for the application.
+Centralised configuration for the application.
+Supports both local .env and Streamlit Cloud secrets.
 """
 
 import os
@@ -8,6 +9,15 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# --- Load Streamlit Cloud secrets if available ---
+try:
+    import streamlit as st
+    if hasattr(st, "secrets"):
+        if "GOOGLE_API_KEY" in st.secrets:
+            os.environ.setdefault("GOOGLE_API_KEY", st.secrets["GOOGLE_API_KEY"])
+except Exception:
+    pass  # Not running inside Streamlit, that's fine
 
 # --- Paths ---
 BASE_DIR = Path(__file__).parent

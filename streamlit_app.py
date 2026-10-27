@@ -3,6 +3,7 @@ SmartServe AI — Streamlit Application
 Main entry point for the Streamlit frontend.
 """
 
+import os
 import streamlit as st
 
 st.set_page_config(
@@ -11,6 +12,10 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
+# --- Load Streamlit Cloud secrets into env vars ---
+if "GOOGLE_API_KEY" in st.secrets:
+    os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
 
 # --- Custom CSS ---
 st.markdown("""
