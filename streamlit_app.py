@@ -126,7 +126,7 @@ with st.sidebar:
     for t in ["LangChain","Gemini AI","ChromaDB","FastAPI","Streamlit","SQLite"]:
         st.markdown(f"<span style='background:rgba(255,255,255,0.1);border-radius:6px;padding:2px 10px;font-size:0.82rem;display:inline-block;margin:2px'>⚙️ {t}</span>", unsafe_allow_html=True)
     st.markdown("---")
-    st.caption("Built for BESYS Technologies Portfolio")
+    st.caption("Built as a portfolio project")
 
 # Hero
 st.markdown("""

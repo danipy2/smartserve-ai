@@ -136,7 +136,7 @@ with st.sidebar:
     - 📊 **Analytics** — You are here
     """)
     st.markdown("---")
-    st.caption("Built for BESYS Technologies Portfolio")
+    st.caption("Built as a portfolio project")
 
 # --- Page Header ---
 st.markdown("""
