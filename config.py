@@ -10,14 +10,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# --- Load Streamlit Cloud secrets if available ---
+# --- Load Streamlit Cloud secrets if available (Render.com uses os.environ directly) ---
 try:
     import streamlit as st
     if hasattr(st, "secrets"):
         if "GOOGLE_API_KEY" in st.secrets:
             os.environ.setdefault("GOOGLE_API_KEY", st.secrets["GOOGLE_API_KEY"])
 except Exception:
-    pass  # Not running inside Streamlit, that's fine
+    pass  # Render.com: env vars already in os.environ
 
 # --- Paths ---
 BASE_DIR = Path(__file__).parent

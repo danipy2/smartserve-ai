@@ -13,9 +13,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Load secrets
-if "GOOGLE_API_KEY" in st.secrets:
-    os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
+# Load secrets — works on both Streamlit Cloud and Render.com
+try:
+    if "GOOGLE_API_KEY" in st.secrets:
+        os.environ.setdefault("GOOGLE_API_KEY", st.secrets["GOOGLE_API_KEY"])
+except Exception:
+    pass  # On Render.com, env vars are already set directly
 
 st.markdown("""
 <style>
