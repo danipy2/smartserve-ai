@@ -11,7 +11,6 @@ import streamlit as st
 # Must be first Streamlit command
 st.set_page_config(page_title="Chat — SmartServe AI", page_icon="💬", layout="wide")
 
-# Add parent directory to path for imports
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -31,26 +30,28 @@ import config
 
 init_db()
 
-# ── Auto-seed sample KB if empty (so demo always works) ───────────────────────
+# ── Auto-seed demo KB if empty ─────────────────────────────────────────────────
 def seed_sample_kb():
-    """Load sample knowledge base on first run so the chat always has docs."""
+    """Load demo knowledge base on cold start so chat always works immediately."""
     sample_file = config.BASE_DIR / "uploads" / "sample_knowledge_base.txt"
     if not sample_file.exists():
-        return
+        return False
     existing_docs = get_all_documents()
     already_seeded = any(d["filename"] == "sample_knowledge_base.txt" for d in existing_docs)
     if already_seeded:
-        return
+        return True
     try:
-        chunks = process_document(str(sample_file))
-        add_documents(chunks)
-        add_document_record(
-            filename="sample_knowledge_base.txt",
-            file_type=".txt",
-            chunk_count=len(chunks),
-        )
+        with st.spinner("⚙️ Loading demo knowledge base for the first time…"):
+            chunks = process_document(str(sample_file))
+            add_documents(chunks)
+            add_document_record(
+                filename="sample_knowledge_base.txt",
+                file_type=".txt",
+                chunk_count=len(chunks),
+            )
+        return True
     except Exception:
-        pass  # Silent — don't crash if seeding fails
+        return False
 
 seed_sample_kb()
 
@@ -65,7 +66,7 @@ def run_async(coro):
         loop.close()
 
 
-# --- Session State Initialization ---
+# --- Session State ---
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
 if "messages" not in st.session_state:
@@ -75,7 +76,7 @@ if "conversation_id" not in st.session_state:
         st.session_state.session_id
     )
 
-# ── Global Styles ──────────────────────────────────────────────────────────────
+# ── Styles ─────────────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
@@ -91,6 +92,9 @@ st.markdown("""
     border: 1px solid rgba(14,165,233,0.4) !important;
     color: #e2e8f0 !important;
     border-radius: 8px !important;
+    text-align: left !important;
+    font-size: 0.83rem !important;
+    margin-bottom: 3px !important;
   }
   section[data-testid="stSidebar"] .stButton > button:hover {
     background: rgba(14,165,233,0.35) !important;
@@ -106,6 +110,17 @@ st.markdown("""
   .page-header h1 { font-size: 1.8rem; font-weight: 800; margin: 0 0 0.2rem; }
   .page-header p  { margin: 0; opacity: 0.85; font-size: 0.95rem; }
 
+  .demo-banner {
+    background: linear-gradient(135deg, #064e3b, #065f46);
+    border: 1px solid #34d399;
+    border-radius: 14px; padding: 1.2rem 1.5rem;
+    margin-bottom: 1.2rem;
+    display: flex; align-items: flex-start; gap: 1rem;
+  }
+  .demo-banner .demo-icon { font-size: 2rem; flex-shrink: 0; }
+  .demo-banner h4 { color: #6ee7b7; font-size: 1rem; font-weight: 700; margin: 0 0 0.3rem; }
+  .demo-banner p  { color: #a7f3d0; font-size: 0.85rem; margin: 0; line-height: 1.5; }
+
   .kb-status-ok {
     background: linear-gradient(135deg, #064e3b, #065f46);
     border: 1px solid #34d399;
@@ -119,17 +134,15 @@ st.markdown("""
     color: #fef3c7; margin-bottom: 1rem;
   }
   .kb-status-ok h4, .kb-status-warn h4 { margin: 0 0 0.3rem; font-size: 0.9rem; font-weight: 700; }
-  .kb-status-ok p, .kb-status-warn p   { margin: 0; font-size: 0.82rem; opacity: 0.9; }
+  .kb-status-ok p,  .kb-status-warn p  { margin: 0; font-size: 0.82rem; opacity: 0.9; }
 
   .conf-badge-high   { background:#dcfce7; color:#166534; border-radius:6px; padding:2px 10px; font-size:0.78rem; font-weight:700; }
   .conf-badge-medium { background:#fef9c3; color:#854d0e; border-radius:6px; padding:2px 10px; font-size:0.78rem; font-weight:700; }
   .conf-badge-low    { background:#fee2e2; color:#991b1b; border-radius:6px; padding:2px 10px; font-size:0.78rem; font-weight:700; }
 
   .source-card {
-    background: #f0f9ff;
-    border: 1px solid #bae6fd;
-    border-radius: 8px; padding: 0.75rem 1rem;
-    margin-bottom: 0.5rem;
+    background: #f0f9ff; border: 1px solid #bae6fd;
+    border-radius: 8px; padding: 0.75rem 1rem; margin-bottom: 0.5rem;
   }
   .source-card strong { color: #0c4a6e; font-size: 0.88rem; }
   .source-card p { margin: 0.25rem 0 0; color: #64748b; font-size: 0.82rem; }
@@ -142,10 +155,30 @@ st.markdown("""
     font-size: 0.78rem; font-family: monospace;
     display: inline-block; margin-top: 0.5rem;
   }
+
+  .demo-q-label {
+    color: #7dd3fc !important;
+    font-size: 0.78rem !important;
+    font-weight: 600 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px !important;
+    display: block;
+  }
 </style>
 """, unsafe_allow_html=True)
 
-# --- Sidebar ---
+# ── Sidebar ────────────────────────────────────────────────────────────────────
+DEMO_QUESTIONS = [
+    "What is your return policy?",
+    "How do I claim warranty on a laptop?",
+    "What payment methods do you accept?",
+    "How long does delivery take to Hawassa?",
+    "Do you offer bulk discounts?",
+    "What are your branch locations?",
+    "How do I track my order?",
+]
+
 with st.sidebar:
     st.markdown("## 🧠 SmartServe AI")
     st.markdown("*RAG Support Platform*")
@@ -159,18 +192,18 @@ with st.sidebar:
     """)
     st.markdown("---")
 
-    # Knowledge base status
     stats = get_collection_stats()
     if stats["total_chunks"] > 0:
         st.markdown(f"""
         <div class="kb-status-ok">
           <h4>📚 Knowledge Base Active</h4>
-          <p>{stats['total_documents']} document(s) &nbsp;·&nbsp; {stats['total_chunks']} chunks indexed</p>
+          <p>{stats['total_documents']} doc(s) &nbsp;·&nbsp; {stats['total_chunks']} chunks indexed</p>
         </div>
         """, unsafe_allow_html=True)
         with st.expander("📑 Loaded Documents"):
             for source in stats["sources"]:
-                st.markdown(f"📄 {source}")
+                label = "🔖 Demo" if source == "sample_knowledge_base.txt" else "📄"
+                st.markdown(f"{label} {source}")
     else:
         st.markdown("""
         <div class="kb-status-warn">
@@ -178,6 +211,13 @@ with st.sidebar:
           <p>Go to Knowledge Base to upload files first.</p>
         </div>
         """, unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.markdown('<span class="demo-q-label">💡 Try these questions</span>', unsafe_allow_html=True)
+    for q in DEMO_QUESTIONS:
+        if st.button(q, key=f"dq_{q[:25]}", use_container_width=True):
+            st.session_state.pending_question = q
+            st.rerun()
 
     st.markdown("---")
     if st.button("🔄 New Conversation", use_container_width=True):
@@ -193,37 +233,52 @@ with st.sidebar:
         unsafe_allow_html=True
     )
 
-# --- Page Header ---
+# ── Page Header ────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="page-header">
   <div class="icon">💬</div>
   <div>
     <h1>AI Support Chat</h1>
-    <p>Ask questions about your uploaded documents — answers include sources & confidence scores</p>
+    <p>Ask questions about any uploaded document — answers come with source citations & confidence scores</p>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-# --- Refresh stats (after sidebar) ---
+# ── Demo Banner ────────────────────────────────────────────────────────────────
 stats = get_collection_stats()
+is_demo = any(d["filename"] == "sample_knowledge_base.txt" for d in get_all_documents())
 
-# Display chat messages
+if is_demo and stats["total_chunks"] > 0:
+    st.markdown("""
+    <div class="demo-banner">
+      <div class="demo-icon">🚀</div>
+      <div>
+        <h4>Demo Document Pre-loaded — Start Chatting Now!</h4>
+        <p>
+          We've automatically loaded a <strong>BizCorp Ethiopia Customer Support Knowledge Base</strong>
+          covering return policies, warranties, delivery, payments, branch locations, and FAQs.<br>
+          <em>👈 Click any question in the sidebar to try it instantly,
+          or type your own. Want to test with your own document? Go to 📄 Knowledge Base to upload one.</em>
+        </p>
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ── Chat History ───────────────────────────────────────────────────────────────
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-        # Show confidence and sources for assistant messages
         if message["role"] == "assistant" and "metadata" in message:
             meta = message["metadata"]
             confidence = meta.get("confidence", 0)
 
-            # Confidence badge
             if confidence >= 0.7:
-                badge_cls, label = "conf-badge-high", f"🟢 High Confidence — {confidence:.0%}"
+                badge_cls, label = "conf-badge-high",   f"🟢 High Confidence — {confidence:.0%}"
             elif confidence >= config.CONFIDENCE_THRESHOLD:
                 badge_cls, label = "conf-badge-medium", f"🟡 Medium Confidence — {confidence:.0%}"
             else:
-                badge_cls, label = "conf-badge-low", f"🔴 Low Confidence — {confidence:.0%}"
+                badge_cls, label = "conf-badge-low",    f"🔴 Low Confidence — {confidence:.0%}"
 
             st.markdown(f'<span class="{badge_cls}">{label}</span>', unsafe_allow_html=True)
 
@@ -240,20 +295,23 @@ for message in st.session_state.messages:
                           <p>{src['preview']}</p>
                         </div>""", unsafe_allow_html=True)
 
-# Chat input
-if prompt := st.chat_input("Ask a question about your documents…"):
+# ── Chat Input ─────────────────────────────────────────────────────────────────
+pending = st.session_state.pop("pending_question", None)
+prompt = st.chat_input("Ask anything about the knowledge base…")
+if pending and not prompt:
+    prompt = pending
+
+if prompt:
     if stats["total_chunks"] == 0:
-        st.warning("⚠️ Please upload documents to the Knowledge Base first before asking questions.")
+        st.warning("⚠️ No documents loaded yet. Please upload a document in the Knowledge Base page first.")
         st.stop()
 
-    # Display user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Generate AI response
     with st.chat_message("assistant"):
-        with st.spinner("🔍 Searching knowledge base and generating response…"):
+        with st.spinner("🔍 Searching knowledge base and generating answer…"):
             history = get_chat_history(st.session_state.conversation_id)
 
             add_message(
@@ -262,15 +320,12 @@ if prompt := st.chat_input("Ask a question about your documents…"):
                 content=prompt,
             )
 
-            result = run_async(query(
-                question=prompt,
-                chat_history=history,
-            ))
+            result = run_async(query(question=prompt, chat_history=history))
 
-            answer = result["answer"]
-            confidence = result["confidence"]
+            answer           = result["answer"]
+            confidence       = result["confidence"]
             needs_escalation = result["needs_escalation"]
-            sources = result["sources"]
+            sources          = result["sources"]
 
             add_message(
                 conversation_id=st.session_state.conversation_id,
@@ -283,13 +338,12 @@ if prompt := st.chat_input("Ask a question about your documents…"):
 
             st.markdown(answer)
 
-            # Confidence badge
             if confidence >= 0.7:
-                badge_cls, label = "conf-badge-high", f"🟢 High Confidence — {confidence:.0%}"
+                badge_cls, label = "conf-badge-high",   f"🟢 High Confidence — {confidence:.0%}"
             elif confidence >= config.CONFIDENCE_THRESHOLD:
                 badge_cls, label = "conf-badge-medium", f"🟡 Medium Confidence — {confidence:.0%}"
             else:
-                badge_cls, label = "conf-badge-low", f"🔴 Low Confidence — {confidence:.0%}"
+                badge_cls, label = "conf-badge-low",    f"🔴 Low Confidence — {confidence:.0%}"
 
             st.markdown(f'<span class="{badge_cls}">{label}</span>', unsafe_allow_html=True)
 
@@ -305,7 +359,6 @@ if prompt := st.chat_input("Ask a question about your documents…"):
                           <p>{src['preview']}</p>
                         </div>""", unsafe_allow_html=True)
 
-    # Save to session state
     st.session_state.messages.append({
         "role": "assistant",
         "content": answer,

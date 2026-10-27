@@ -260,28 +260,58 @@ else:
     FILE_ICONS = {".pdf": "📕", ".txt": "📝", ".docx": "📘"}
     for doc in documents:
         icon = FILE_ICONS.get(doc["file_type"], "📄")
+        is_demo = doc["filename"] == "sample_knowledge_base.txt"
+        demo_badge = (
+            '<span style="background:#064e3b;color:#34d399;border:1px solid #34d399;'
+            'border-radius:12px;padding:2px 10px;font-size:0.72rem;font-weight:700;'
+            'margin-left:8px;">📌 DEMO</span>'
+            if is_demo else ""
+        )
         col1, col2 = st.columns([6, 1])
         with col1:
             st.markdown(f"""
             <div class="doc-row">
               <div class="doc-icon">{icon}</div>
               <div>
-                <div class="doc-name">{doc['filename']}</div>
+                <div class="doc-name">{doc['filename']}{demo_badge}</div>
                 <div class="doc-meta">
                   {doc['file_type'].upper()} &nbsp;·&nbsp;
                   {doc['chunk_count']} chunks &nbsp;·&nbsp;
-                  Uploaded {doc['uploaded_at'][:10]}
+                  {'Auto-loaded demo document' if is_demo else f"Uploaded {doc['uploaded_at'][:10]}"}
                 </div>
               </div>
             </div>""", unsafe_allow_html=True)
         with col2:
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("🗑️ Delete", key=f"del_{doc['id']}", use_container_width=True):
-                delete_document_by_source(doc["filename"])
-                delete_document_record(doc["filename"])
-                file_path = config.UPLOADS_DIR / doc["filename"]
-                file_path.unlink(missing_ok=True)
-                st.success(f"Deleted {doc['filename']}")
-                st.rerun()
+            if is_demo:
+                st.caption("📌 Demo")
+            else:
+                if st.button("🗑️ Delete", key=f"del_{doc['id']}", use_container_width=True):
+                    delete_document_by_source(doc["filename"])
+                    delete_document_record(doc["filename"])
+                    file_path = config.UPLOADS_DIR / doc["filename"]
+                    file_path.unlink(missing_ok=True)
+                    st.success(f"Deleted {doc['filename']}")
+                    st.rerun()
 
     st.caption(f"Total: {len(documents)} document(s) — {stats['total_chunks']} chunks indexed")
+
+# ── Demo doc description ───────────────────────────────────────────────────────
+st.markdown('<div class="section-title">ℹ️ About the Demo Document</div>', unsafe_allow_html=True)
+st.markdown("""
+<div style="background:#f0f9ff;border:1px solid #bae6fd;border-left:4px solid #0ea5e9;
+            border-radius:10px;padding:1.2rem 1.5rem;font-size:0.9rem;color:#0c4a6e;">
+  <strong>📄 BizCorp Ethiopia — Customer Support Knowledge Base</strong><br><br>
+  This is the <strong>pre-loaded demo document</strong> so you can test the AI without uploading anything.
+  It contains a full company support KB including:<br><br>
+  &nbsp;&nbsp;📦 Return &amp; Refund Policy &nbsp;·&nbsp;
+  🛡️ Warranty Information &nbsp;·&nbsp;
+  🚚 Shipping &amp; Delivery &nbsp;·&nbsp;
+  💳 Payment Methods<br>
+  &nbsp;&nbsp;🔧 Technical Support &nbsp;·&nbsp;
+  💰 Pricing Guide &nbsp;·&nbsp;
+  ❓ FAQs &nbsp;·&nbsp;
+  📍 Branch Locations<br><br>
+  <em>You can upload your own PDF, DOCX, or TXT documents above to replace or add to this demo.</em>
+</div>
+""", unsafe_allow_html=True)
