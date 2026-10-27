@@ -8,7 +8,6 @@ import uuid
 
 import streamlit as st
 
-# Must be first Streamlit command
 st.set_page_config(page_title="Chat — SmartServe AI", page_icon="💬", layout="wide")
 
 import sys
@@ -30,34 +29,8 @@ import config
 
 init_db()
 
-# ── Auto-seed demo KB if empty ─────────────────────────────────────────────────
-def seed_sample_kb():
-    """Load demo knowledge base on cold start so chat always works immediately."""
-    sample_file = config.BASE_DIR / "uploads" / "sample_knowledge_base.txt"
-    if not sample_file.exists():
-        return False
-    existing_docs = get_all_documents()
-    already_seeded = any(d["filename"] == "sample_knowledge_base.txt" for d in existing_docs)
-    if already_seeded:
-        return True
-    try:
-        with st.spinner("⚙️ Loading demo knowledge base for the first time…"):
-            chunks = process_document(str(sample_file))
-            add_documents(chunks)
-            add_document_record(
-                filename="sample_knowledge_base.txt",
-                file_type=".txt",
-                chunk_count=len(chunks),
-            )
-        return True
-    except Exception:
-        return False
-
-seed_sample_kb()
-
 
 def run_async(coro):
-    """Helper to run async functions in Streamlit."""
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
@@ -75,6 +48,8 @@ if "conversation_id" not in st.session_state:
     st.session_state.conversation_id = get_or_create_conversation(
         st.session_state.session_id
     )
+if "kb_seeded" not in st.session_state:
+    st.session_state.kb_seeded = False
 
 # ── Styles ─────────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -103,7 +78,7 @@ st.markdown("""
   .page-header {
     background: linear-gradient(135deg, #0c4a6e 0%, #0369a1 60%, #0ea5e9 100%);
     border-radius: 16px; padding: 1.6rem 2rem;
-    color: white; margin-bottom: 1.5rem;
+    color: white; margin-bottom: 1.2rem;
     display: flex; align-items: center; gap: 1rem;
   }
   .page-header .icon { font-size: 2.5rem; }
@@ -119,22 +94,15 @@ st.markdown("""
   }
   .demo-banner .demo-icon { font-size: 2rem; flex-shrink: 0; }
   .demo-banner h4 { color: #6ee7b7; font-size: 1rem; font-weight: 700; margin: 0 0 0.3rem; }
-  .demo-banner p  { color: #a7f3d0; font-size: 0.85rem; margin: 0; line-height: 1.5; }
+  .demo-banner p  { color: #a7f3d0; font-size: 0.85rem; margin: 0; line-height: 1.6; }
 
   .kb-status-ok {
     background: linear-gradient(135deg, #064e3b, #065f46);
-    border: 1px solid #34d399;
-    border-radius: 12px; padding: 1rem 1.2rem;
-    color: #d1fae5; margin-bottom: 1rem;
+    border: 1px solid #34d399; border-radius: 12px;
+    padding: 1rem 1.2rem; color: #d1fae5; margin-bottom: 1rem;
   }
-  .kb-status-warn {
-    background: linear-gradient(135deg, #422006, #78350f);
-    border: 1px solid #f59e0b;
-    border-radius: 12px; padding: 1rem 1.2rem;
-    color: #fef3c7; margin-bottom: 1rem;
-  }
-  .kb-status-ok h4, .kb-status-warn h4 { margin: 0 0 0.3rem; font-size: 0.9rem; font-weight: 700; }
-  .kb-status-ok p,  .kb-status-warn p  { margin: 0; font-size: 0.82rem; opacity: 0.9; }
+  .kb-status-ok h4 { margin: 0 0 0.3rem; font-size: 0.9rem; font-weight: 700; }
+  .kb-status-ok p  { margin: 0; font-size: 0.82rem; opacity: 0.9; }
 
   .conf-badge-high   { background:#dcfce7; color:#166534; border-radius:6px; padding:2px 10px; font-size:0.78rem; font-weight:700; }
   .conf-badge-medium { background:#fef9c3; color:#854d0e; border-radius:6px; padding:2px 10px; font-size:0.78rem; font-weight:700; }
@@ -150,32 +118,74 @@ st.markdown("""
   .session-chip {
     background: rgba(14,165,233,0.15);
     border: 1px solid rgba(14,165,233,0.3);
-    color: #7dd3fc !important;
-    border-radius: 6px; padding: 3px 10px;
-    font-size: 0.78rem; font-family: monospace;
+    color: #7dd3fc !important; border-radius: 6px;
+    padding: 3px 10px; font-size: 0.78rem; font-family: monospace;
     display: inline-block; margin-top: 0.5rem;
   }
-
   .demo-q-label {
-    color: #7dd3fc !important;
-    font-size: 0.78rem !important;
-    font-weight: 600 !important;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 6px !important;
-    display: block;
+    color: #7dd3fc !important; font-size: 0.78rem !important;
+    font-weight: 600 !important; text-transform: uppercase;
+    letter-spacing: 0.05em; margin-bottom: 6px !important; display: block;
   }
 </style>
 """, unsafe_allow_html=True)
+
+# ── Page Header (render early so page doesn't look blank during seeding) ───────
+st.markdown("""
+<div class="page-header">
+  <div class="icon">💬</div>
+  <div>
+    <h1>AI Support Chat</h1>
+    <p>Answers come with source citations & confidence scores — powered by Gemini RAG</p>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+# ── Auto-seed demo KB ──────────────────────────────────────────────────────────
+# Run AFTER page header so user sees something while it loads
+stats = get_collection_stats()
+
+if stats["total_chunks"] == 0 and not st.session_state.kb_seeded:
+    sample_file = config.BASE_DIR / "uploads" / "sample_knowledge_base.txt"
+    if sample_file.exists():
+        existing_docs = get_all_documents()
+        already_in_db = any(d["filename"] == "sample_knowledge_base.txt" for d in existing_docs)
+        if not already_in_db:
+            with st.spinner("⚙️ Loading demo knowledge base — takes ~10 seconds on first visit…"):
+                try:
+                    chunks = process_document(str(sample_file))
+                    add_documents(chunks)
+                    add_document_record(
+                        filename="sample_knowledge_base.txt",
+                        file_type=".txt",
+                        chunk_count=len(chunks),
+                    )
+                    st.session_state.kb_seeded = True
+                    st.rerun()  # Refresh so stats updates everywhere
+                except Exception as e:
+                    st.warning(f"⚠️ Could not auto-load demo document: {e}. Please upload a document in the Knowledge Base page.")
+        else:
+            # SQLite says seeded but ChromaDB is empty — re-embed
+            with st.spinner("⚙️ Re-indexing demo knowledge base…"):
+                try:
+                    chunks = process_document(str(sample_file))
+                    add_documents(chunks)
+                    st.session_state.kb_seeded = True
+                    st.rerun()
+                except Exception as e:
+                    st.warning(f"⚠️ Could not re-index demo document: {e}")
+
+# Re-fetch stats after potential seeding
+stats = get_collection_stats()
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 DEMO_QUESTIONS = [
     "What is your return policy?",
     "How do I claim warranty on a laptop?",
     "What payment methods do you accept?",
-    "How long does delivery take to Hawassa?",
+    "How long does delivery to Hawassa take?",
     "Do you offer bulk discounts?",
-    "What are your branch locations?",
+    "What are your branch locations and hours?",
     "How do I track my order?",
 ]
 
@@ -192,7 +202,6 @@ with st.sidebar:
     """)
     st.markdown("---")
 
-    stats = get_collection_stats()
     if stats["total_chunks"] > 0:
         st.markdown(f"""
         <div class="kb-status-ok">
@@ -205,15 +214,10 @@ with st.sidebar:
                 label = "🔖 Demo" if source == "sample_knowledge_base.txt" else "📄"
                 st.markdown(f"{label} {source}")
     else:
-        st.markdown("""
-        <div class="kb-status-warn">
-          <h4>⚠️ No Documents Loaded</h4>
-          <p>Go to Knowledge Base to upload files first.</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.info("⏳ Knowledge base loading…")
 
     st.markdown("---")
-    st.markdown('<span class="demo-q-label">💡 Try these questions</span>', unsafe_allow_html=True)
+    st.markdown('<span class="demo-q-label">💡 Click to ask</span>', unsafe_allow_html=True)
     for q in DEMO_QUESTIONS:
         if st.button(q, key=f"dq_{q[:25]}", use_container_width=True):
             st.session_state.pending_question = q
@@ -233,32 +237,18 @@ with st.sidebar:
         unsafe_allow_html=True
     )
 
-# ── Page Header ────────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="page-header">
-  <div class="icon">💬</div>
-  <div>
-    <h1>AI Support Chat</h1>
-    <p>Ask questions about any uploaded document — answers come with source citations & confidence scores</p>
-  </div>
-</div>
-""", unsafe_allow_html=True)
-
 # ── Demo Banner ────────────────────────────────────────────────────────────────
-stats = get_collection_stats()
-is_demo = any(d["filename"] == "sample_knowledge_base.txt" for d in get_all_documents())
-
-if is_demo and stats["total_chunks"] > 0:
+if stats["total_chunks"] > 0:
     st.markdown("""
     <div class="demo-banner">
       <div class="demo-icon">🚀</div>
       <div>
         <h4>Demo Document Pre-loaded — Start Chatting Now!</h4>
         <p>
-          We've automatically loaded a <strong>BizCorp Ethiopia Customer Support Knowledge Base</strong>
-          covering return policies, warranties, delivery, payments, branch locations, and FAQs.<br>
-          <em>👈 Click any question in the sidebar to try it instantly,
-          or type your own. Want to test with your own document? Go to 📄 Knowledge Base to upload one.</em>
+          We've loaded a <strong>BizCorp Ethiopia Customer Support Knowledge Base</strong>
+          covering return policies, warranties, delivery, payments, branches & FAQs.<br>
+          <em>👈 Click any question in the sidebar, or type your own below.
+          Want to test with your own file? Go to 📄 Knowledge Base to upload a PDF, DOCX, or TXT.</em>
         </p>
       </div>
     </div>
@@ -297,21 +287,17 @@ for message in st.session_state.messages:
 
 # ── Chat Input ─────────────────────────────────────────────────────────────────
 pending = st.session_state.pop("pending_question", None)
-prompt = st.chat_input("Ask anything about the knowledge base…")
+prompt  = st.chat_input("Ask anything about the knowledge base…")
 if pending and not prompt:
     prompt = pending
 
 if prompt:
-    if stats["total_chunks"] == 0:
-        st.warning("⚠️ No documents loaded yet. Please upload a document in the Knowledge Base page first.")
-        st.stop()
-
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("🔍 Searching knowledge base and generating answer…"):
+        with st.spinner("🔍 Searching knowledge base…"):
             history = get_chat_history(st.session_state.conversation_id)
 
             add_message(
