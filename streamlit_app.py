@@ -1,5 +1,5 @@
-﻿"""
-SmartServe AI â€” Streamlit Application
+"""
+SmartServe AI — Streamlit Application
 Main entry point for the Streamlit frontend.
 """
 
@@ -8,21 +8,45 @@ import streamlit as st
 
 st.set_page_config(
     page_title="SmartServe AI",
-    page_icon="ðŸ§ ",
+    page_icon="🧠",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Load secrets â€” works on both Streamlit Cloud and Render.com
+# Load secrets — works on both Streamlit Cloud and Render.com
 try:
     if "GOOGLE_API_KEY" in st.secrets:
         os.environ.setdefault("GOOGLE_API_KEY", st.secrets["GOOGLE_API_KEY"])
 except Exception:
-    pass  # On Render.com, env vars are already set directly
+    pass
 
 if not os.environ.get("GOOGLE_API_KEY"):
-    st.error("âš ï¸ **GOOGLE_API_KEY not configured.** Add it as an Environment Variable on Render.com.")
+    st.error("⚠️ **GOOGLE_API_KEY not configured.** Add it as an Environment Variable on Render.com.")
     st.stop()
+
+# Ensure demo knowledge base is seeded
+try:
+    import config
+    from core.vector_store import get_collection_stats, add_documents
+    from core.document_processor import process_document
+    from database.db import add_document_record, get_all_documents, init_db
+
+    init_db()
+    stats = get_collection_stats()
+    if stats["total_chunks"] == 0:
+        sample_file = config.BASE_DIR / "uploads" / "sample_knowledge_base.txt"
+        if sample_file.exists():
+            chunks = process_document(str(sample_file))
+            add_documents(chunks)
+            existing = [d["filename"] for d in get_all_documents()]
+            if "sample_knowledge_base.txt" not in existing:
+                add_document_record(
+                    filename="sample_knowledge_base.txt",
+                    file_type=".txt",
+                    chunk_count=len(chunks),
+                )
+except Exception:
+    pass
 
 st.markdown("""
 <style>
@@ -42,7 +66,7 @@ st.markdown("""
     position: relative; overflow: hidden;
   }
   .hero::before {
-    content: 'ðŸ§ ';
+    content: '🧠';
     position: absolute; right: 2rem; top: 50%;
     transform: translateY(-50%);
     font-size: 9rem; opacity: 0.08;
@@ -111,48 +135,56 @@ st.markdown("""
 
 # Sidebar
 with st.sidebar:
-    st.markdown("## ðŸ§  SmartServe AI")
+    st.markdown("## 🧠 SmartServe AI")
     st.markdown("*RAG Support Platform*")
     st.markdown("---")
-    st.markdown("### ðŸ—‚ Navigation")
+    st.markdown("### 🗂 Navigation")
     st.markdown("""
-    - ðŸ  **Overview** â€” You are here
-    - ðŸ’¬ **Chat** â€” Talk to the AI
-    - ðŸ“„ **Knowledge Base** â€” Manage docs
-    - ðŸ“Š **Analytics** â€” Performance metrics
+    - 🏠 **Overview** — You are here
+    - 💬 **Chat** — Talk to the AI
+    - 📄 **Knowledge Base** — Manage docs
+    - 📊 **Analytics** — Performance metrics
     """)
     st.markdown("---")
-    st.markdown("### âš™ï¸ Tech Stack")
-    for t in ["LangChain","Gemini AI","ChromaDB","FastAPI","Streamlit","SQLite"]:
-        st.markdown(f"<span style='background:rgba(255,255,255,0.1);border-radius:6px;padding:2px 10px;font-size:0.82rem;display:inline-block;margin:2px'>âš™ï¸ {t}</span>", unsafe_allow_html=True)
+    st.markdown("### ⚙️ Tech Stack")
+    for t in ["LangChain", "Gemini AI", "ChromaDB", "FastAPI", "Streamlit", "SQLite"]:
+        st.markdown(f"<span style='background:rgba(255,255,255,0.1);border-radius:6px;padding:2px 10px;font-size:0.82rem;display:inline-block;margin:2px'>⚙️ {t}</span>", unsafe_allow_html=True)
     st.markdown("---")
     st.caption("Built as a portfolio project")
 
 # Hero
 st.markdown("""
 <div class="hero">
-  <h1>ðŸ§  SmartServe AI</h1>
+  <h1>🧠 SmartServe AI</h1>
   <p>RAG-powered customer support platform. Upload your documents and get an intelligent chatbot
      that answers questions with citations, confidence scoring, and smart escalation.</p>
   <div style="margin-top:1.2rem">
-    <span class="badge">ðŸ” Semantic Search</span>
-    <span class="badge">ðŸ“„ PDF & DOCX</span>
-    <span class="badge">ðŸŽ¯ Confidence Scoring</span>
-    <span class="badge">ðŸ”— Source Citations</span>
-    <span class="badge">ðŸ‘¤ Auto Escalation</span>
+    <span class="badge">🔍 Semantic Search</span>
+    <span class="badge">📄 PDF & DOCX</span>
+    <span class="badge">🎯 Confidence Scoring</span>
+    <span class="badge">🔗 Source Citations</span>
+    <span class="badge">👤 Auto Escalation</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
+# Demo-ready callout at top
+st.markdown("""
+<div style="background:linear-gradient(135deg,#064e3b,#065f46);border:1px solid #34d399;border-radius:14px;padding:1.4rem 1.8rem;margin-bottom:1.5rem;">
+  <strong style="color:#6ee7b7;font-size:1.05rem">🚀 Demo-Ready — Start Asking Questions Right Away!</strong><br>
+  <span style="color:#a7f3d0;font-size:0.88rem">A <strong>BizCorp Ethiopia Customer Support Knowledge Base</strong> is pre-loaded automatically. Head directly to <strong>💬 Chat</strong> and test any questions from the sidebar — no file upload required! You can also upload your own custom PDFs/docs anytime in <strong>📄 Knowledge Base</strong>.</span>
+</div>
+""", unsafe_allow_html=True)
+
 # Feature cards
-st.markdown('<div class="section-title">âœ¨ Key Features</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">✨ Key Features</div>', unsafe_allow_html=True)
 f1, f2, f3 = st.columns(3)
 features = [
-    (f1, "ðŸ“„", "Document Intelligence",
-     "Upload PDFs and Word docs. The AI chunks, embeds, and indexes them into a vector store for instant retrieval."),
-    (f2, "ðŸŽ¯", "Confidence Scoring",
-     "Every answer is scored 0â€“100%. Below 60%, the question auto-escalates to a human agent â€” no wrong answers."),
-    (f3, "ðŸ”—", "Source Citations",
+    (f1, "📄", "Document Intelligence",
+     "Upload PDFs and Word docs. The AI chunks, embeds, and indexes them into ChromaDB vector store for instant retrieval."),
+    (f2, "🎯", "Confidence Scoring",
+     "Every answer is scored 0–100%. Below 60%, the question auto-escalates to a human agent — zero hallucinations."),
+    (f3, "🔗", "Source Citations",
      "Every response shows which document and section the information came from, so users can verify answers."),
 ]
 for col, icon, title, desc in features:
@@ -166,17 +198,17 @@ for col, icon, title, desc in features:
 st.markdown("<br>", unsafe_allow_html=True)
 
 # RAG Pipeline
-st.markdown('<div class="section-title">ðŸ”„ How RAG Works</div>', unsafe_allow_html=True)
+st.markdown('<div class="section-title">🔄 How RAG Works</div>', unsafe_allow_html=True)
 col_a, col_b = st.columns(2)
 steps = [
-    ("ðŸ“„ Upload Documents",    "PDF and DOCX files ingested via the Knowledge Base page"),
-    ("âœ‚ï¸ Chunking",           "Documents split into 1,000-char overlapping chunks"),
-    ("ðŸ”¢ Embedding",          "Each chunk embedded via Gemini text-embedding-004"),
-    ("ðŸ—„ï¸ Vector Store",       "Embeddings stored in ChromaDB for fast similarity search"),
-    ("ðŸ’¬ User Question",       "Customer asks a question in natural language"),
-    ("ðŸ” Semantic Search",     "Top-5 most relevant chunks retrieved from ChromaDB"),
-    ("ðŸ§  LLM Generation",      "Gemini generates answer grounded in retrieved context"),
-    ("ðŸ“Š Confidence Score",    "LLM self-evaluates confidence â†’ escalate if < 60%"),
+    ("📄 Upload Documents",    "PDF and DOCX files ingested via the Knowledge Base page"),
+    ("✂️ Chunking",           "Documents split into 1,000-char overlapping chunks"),
+    ("🔢 Embedding",          "Each chunk embedded via Gemini text-embedding-004"),
+    ("🗄️ Vector Store",       "Embeddings stored in ChromaDB for fast similarity search"),
+    ("💬 User Question",       "Customer asks a question in natural language"),
+    ("🔍 Semantic Search",     "Top-5 most relevant chunks retrieved from ChromaDB"),
+    ("🧠 LLM Generation",      "Gemini generates answer grounded in retrieved context"),
+    ("📊 Confidence Score",    "LLM self-evaluates confidence → escalate if < 60%"),
 ]
 for i, (title, desc) in enumerate(steps):
     col = col_a if i % 2 == 0 else col_b
@@ -187,18 +219,10 @@ for i, (title, desc) in enumerate(steps):
     </div>""", unsafe_allow_html=True)
 
 # Tech stack
-st.markdown('<div class="section-title">ðŸ› ï¸ Tech Stack</div>', unsafe_allow_html=True)
-techs = ["ðŸ”— LangChain 0.3", "â™Š Gemini 3.8 Flash", "ðŸ—„ï¸ ChromaDB", "âš¡ FastAPI",
-         "ðŸŽˆ Streamlit", "ðŸ—ƒï¸ SQLite", "ðŸ“„ PyPDF", "ðŸ“ python-docx"]
+st.markdown('<div class="section-title">🛠️ Tech Stack</div>', unsafe_allow_html=True)
+techs = ["🔗 LangChain 0.3", "♊ Gemini 3.8 Flash", "🗄️ ChromaDB", "⚡ FastAPI",
+         "🎈 Streamlit", "🗃️ SQLite", "📄 PyPDF", "📝 python-docx"]
 st.markdown("".join(f'<span class="tech-chip">{t}</span>' for t in techs), unsafe_allow_html=True)
 
 st.markdown("<br><br>", unsafe_allow_html=True)
-st.info("ðŸ‘ˆ Start by going to **ðŸ“„ Knowledge Base** to upload documents, then use **ðŸ’¬ Chat** to ask questions!")
-
-# Demo-ready callout
-st.markdown("""
-<div style="background:linear-gradient(135deg,#064e3b,#065f46);border:1px solid #34d399;border-radius:14px;padding:1.4rem 1.8rem;">
-  <strong style="color:#6ee7b7;font-size:1rem">🚀 Demo-Ready — No Setup Needed!</strong><br>
-  <span style="color:#a7f3d0;font-size:0.88rem">A <strong>BizCorp Ethiopia Customer Support Knowledge Base</strong> is pre-loaded automatically. Head to <strong>💬 Chat</strong> and start asking questions instantly — no upload needed. Want to test your own document? Go to 📄 Knowledge Base and upload any PDF, DOCX or TXT.</span>
-</div>
-""", unsafe_allow_html=True)
+st.success("👉 Head over to **💬 Chat** in the sidebar to start asking questions immediately!")
